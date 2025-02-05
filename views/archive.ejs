@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/dashboard">WAIVE Sampler Database Manager</a>
+      <div class="d-flex">
+        <a href="/logout" class="btn btn-outline-light">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <h2>Archive: <%= archive %></h2>
+
+    <!-- Upload File Form -->
+    <div class="card my-4 p-3">
+      <h4>Upload File</h4>
+      <form action="/upload?archive=<%= archive %>" method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+          <input type="file" name="file" class="form-control" required>
+        </div>
+        <input name="archive" type="hidden" value="<%= archive %>">
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </form>
+    </div>
+
+    <!-- Actions to apply to all entries -->
+    <div class="card my-4 p-3">
+      <h4>Apply to all entries</h4>
+      <form action="/update/<%= archive %>" method="POST">
+        <div class="mb-3">
+          <div class="container">
+            <div class="row">
+              <div class="col">
+                <input name="description" class="form-control" type="text" placeholder="Description" data-toggle="tooltip" data-placement="bottom" title="Short description of audio file.">
+              </div>
+              <div class="col">
+                <input name="tags" class="form-control" type="text" placeholder="Tags" data-toggle="tooltip" data-placement="bottom" title="List of tags separated by the '|' symbol. E.g. 'car|machine|engine'">
+              </div>
+              <div class="col">
+                <input name="license" class="form-control" type="text" placeholder="License" data-toggle="tooltip" data-placement="bottom" title="A full URL (including https://) to a page with license info about the audio material.">
+              </div>
+            </div>
+          </div>
+        </div>
+        <input name="archive" type="hidden" value="<%= archive %>">
+        <button class="btn btn-primary">Update All</button>
+      </form>
+    </div>
+
+    <!-- List of Files/Folders -->
+    <div class="card my-4 p-3">
+      <h4>Sources</h4>
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">id</th>
+            <th scope="col">filename</th>
+            <th scope="col">description</th>
+            <th scope="col">tags</th>
+            <th scope="col">license</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (files.length===0) { %>
+          <tr>
+            <td colspan="5" class="text-center">
+              No sources found.
+            </td>
+          </tr>
+          <% } else { %>
+          <% files.forEach(file=> { %>
+          <tr>
+            <th scope="row"><%= file.id %></th>
+            <td><a href="/uploads/<%= archive %>/<%= file.filename %>" target="_blank"> <%= file.filename %> </a></td>
+            <td><%= file.description %></td>
+            <td><%= file.tags %></td>
+            <% if (file.license) { %>
+            <td> <a href="<%= file.license %>" target="_blank" rel="noopener noreferrer">link</a></td>
+            <% } else { %>
+            <td>--</td>
+            <% } %>
+          </tr>
+          <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</body>
+
+</html>
