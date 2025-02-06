@@ -78,13 +78,12 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/latest', (req, res) => {
+    console.log("/latest");
     res.json({ version: user_version });
 });
 
 app.get('/filelist', async (req, res) => {
-    if (last_csv_version != user_version) {
-        await createCSV();
-    }
+    console.log("/filelist");
 
     res.sendFile(path.join(__dirname, 'public', 'all_samples_data.tsv'));
 });
@@ -246,6 +245,8 @@ const setup = async () => {
     user_version = result[0].user_version;
     console.log(user_version);
 
+    createCSV();
+
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
     });
@@ -260,6 +261,8 @@ async function updateVersion(db) {
     await db.run(`PRAGMA user_version = ${user_version}`, [], (err) => {
         console.log(err);
     });
+
+    await createCSV();
 }
 
 async function createCSV() {
@@ -267,7 +270,7 @@ async function createCSV() {
     const writableStream = fs.createWriteStream(path.join(__dirname, 'public', 'all_samples_data.tsv'));
 
     const columns = [
-        'id', 'archive', 'description', 'tags', 'filename', 'license'
+        "id", "description", "tags", "folder", "filename", "archive", "url", "license"
     ];
 
     const stringifier = stringify({ header: true, columns: columns, delimiter: '\t' });
@@ -282,6 +285,9 @@ async function createCSV() {
         if (row.description == undefined) {
             row.description = row.filename;
         }
+
+        row.url = `${row.archive}/${row.filename}`;
+
         stringifier.write(row);
     });
 
