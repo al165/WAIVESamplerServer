@@ -5,6 +5,7 @@ import path, { resolve } from 'path';
 import fs from 'fs';
 import { stringify } from 'csv-stringify';
 import { fileURLToPath } from 'url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -25,11 +26,14 @@ let last_csv_version;
 import { config } from 'dotenv';
 config({ path: './.env' });
 
+const CONFIG_DIR = process.env.CONFIG_DIR || 'uploads';
+console.log("CONFIG_DIR: " + CONFIG_DIR);
+
 // Middleware setup
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/file', express.static(CONFIG_DIR));
 
 // Session configuration
 app.use(session({
@@ -41,7 +45,7 @@ app.use(session({
 // Multer setup for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const currentPath = path.join(__dirname, 'uploads', req.query.archive);
+        const currentPath = path.join(__dirname, CONFIG_DIR, req.query.archive);
         if (!fs.existsSync(currentPath)) fs.mkdirSync(currentPath, { recursive: true });
         cb(null, currentPath);
     },
@@ -64,7 +68,7 @@ function isAuthenticated(req, res, next) {
     res.redirect('/login');
 }
 
-// Routes
+// GET Routes
 app.get('/', (req, res) => {
     res.redirect('/dashboard');
 });
@@ -85,14 +89,8 @@ app.get('/filelist', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'all_samples_data.tsv'));
 });
 
-app.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    if (username === USER.username && password === USER.password) {
-        req.session.user = USER;
-        res.redirect('/dashboard');
-    } else {
-        res.render('login', { error: 'Invalid credentials' });
-    }
+app.get('/tags', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'tags.tsv'));
 });
 
 app.get('/logout', (req, res) => {
@@ -106,14 +104,12 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
         return rows;
     });
 
-    console.log(archives);
-
     res.render('dashboard', { archives, user_version });
 });
 
 app.get('/dashboard/*', isAuthenticated, async (req, res) => {
     const archive = req.params[0];
-    const currentPath = path.join(__dirname, 'uploads', archive);
+    const currentPath = path.join(__dirname, CONFIG_DIR, archive);
 
     if (!fs.existsSync(currentPath)) {
         return res.redirect('/dashboard');
@@ -123,6 +119,17 @@ app.get('/dashboard/*', isAuthenticated, async (req, res) => {
     const sources = await db.all('SELECT * FROM Sources WHERE archive = ?', [archive]);
 
     res.render('archive', { files: sources, archive, user_version });
+});
+
+// POST Routes
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === USER.username && password === USER.password) {
+        req.session.user = USER;
+        res.redirect('/dashboard');
+    } else {
+        res.render('login', { error: 'Invalid credentials' });
+    }
 });
 
 app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
@@ -148,7 +155,7 @@ app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
 
 app.post('/add-archive', isAuthenticated, async (req, res) => {
     const archiveName = removeWhitespaceExceptSpace(req.body.archiveName);
-    const folderPath = path.join(__dirname, 'uploads', archiveName);
+    const folderPath = path.join(__dirname, CONFIG_DIR, archiveName);
 
     if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath);
@@ -166,7 +173,7 @@ app.post('/add-archive', isAuthenticated, async (req, res) => {
 
 app.post('/update/*', isAuthenticated, async (req, res) => {
     const archive = req.params[0];
-    const folderPath = path.join(__dirname, 'uploads', archive);
+    const folderPath = path.join(__dirname, CONFIG_DIR, archive);
 
     console.log("/update for archive " + archive);
 
@@ -272,13 +279,13 @@ async function createCSV() {
             return;
         }
 
-        console.log(row);
-
+        if (row.description == undefined) {
+            row.description = row.filename;
+        }
         stringifier.write(row);
     });
 
     stringifier.pipe(writableStream);
-    // stringifier.destroy();
 
     last_csv_version = user_version;
     console.log("finished writing CSV");

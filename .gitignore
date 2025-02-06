@@ -8,6 +8,7 @@ uploads/*
 
 # generated CSV files
 *.tsv
+!tags.tsv
 
 # writableStream lock
 .~lock*

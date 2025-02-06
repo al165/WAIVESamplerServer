@@ -94,7 +94,7 @@
           <% files.forEach(file=> { %>
           <tr>
             <th scope="row"><%= file.id %></th>
-            <td><a href="/uploads/<%= archive %>/<%= file.filename %>" target="_blank"> <%= file.filename %> </a></td>
+            <td><a href="/file/<%= archive %>/<%= file.filename %>" target="_blank"> <%= file.filename %> </a></td>
             <td><%= file.description %></td>
             <td><%= file.tags %></td>
             <% if (file.license) { %>
