@@ -6,6 +6,12 @@ uploads/*
 
 *.db
 
+# generated CSV files
+*.tsv
+
+# writableStream lock
+.~lock*
+
 ### Node ###
 # Logs
 logs

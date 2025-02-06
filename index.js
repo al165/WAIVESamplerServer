@@ -3,6 +3,7 @@ import session from 'express-session';
 import multer from 'multer';
 import path, { resolve } from 'path';
 import fs from 'fs';
+import { stringify } from 'csv-stringify';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,7 @@ const app = express();
 const PORT = 3000;
 
 let user_version;
+let last_csv_version;
 
 import { config } from 'dotenv';
 config({ path: './.env' });
@@ -71,6 +73,18 @@ app.get('/login', (req, res) => {
     res.render('login');
 });
 
+app.get('/latest', (req, res) => {
+    res.json({ version: user_version });
+});
+
+app.get('/filelist', async (req, res) => {
+    if (last_csv_version != user_version) {
+        await createCSV();
+    }
+
+    res.sendFile(path.join(__dirname, 'public', 'all_samples_data.tsv'));
+});
+
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     if (username === USER.username && password === USER.password) {
@@ -118,7 +132,13 @@ app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
 
     await db.run("BEGIN TRANSACTION");
     for (const file of files) {
-        await db.run("INSERT INTO Sources(archive, filename) VALUES (?, ?)", [archive, file.originalname]);
+        // generate id
+        const serverID = 101;
+        const timestamp = Date.now() % 1000000;
+        const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        const id = parseInt(`${serverID}${timestamp}${rand}`);
+
+        await db.run("INSERT INTO Sources(id, archive, filename) VALUES (?, ?, ?)", [id, archive, file.originalname]);
     }
     await db.run("COMMIT");
 
@@ -127,7 +147,7 @@ app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
 });
 
 app.post('/add-archive', isAuthenticated, async (req, res) => {
-    const archiveName = req.body.archiveName;
+    const archiveName = removeWhitespaceExceptSpace(req.body.archiveName);
     const folderPath = path.join(__dirname, 'uploads', archiveName);
 
     if (!fs.existsSync(folderPath)) {
@@ -167,19 +187,19 @@ app.post('/update/*', isAuthenticated, async (req, res) => {
 
     if (description) {
         columns.push("description = ?");
-        params.push(description);
+        params.push(removeWhitespaceExceptSpace(description));
         update = true;
     }
 
     if (tags) {
         columns.push("tags = ?");
-        params.push(tags);
+        params.push(removeWhitespaceExceptSpace(tags));
         update = true;
     }
 
     if (license) {
         columns.push("license = ?");
-        params.push(license);
+        params.push(removeWhitespaceExceptSpace(license));
         update = true;
     }
 
@@ -235,34 +255,41 @@ async function updateVersion(db) {
     });
 }
 
-async function getSourceList() {
-    // Creates a CSV file with the headings
-    // Archive, Name, [description], [tags]
+async function createCSV() {
+    console.log("createCSV()");
+    const writableStream = fs.createWriteStream(path.join(__dirname, 'public', 'all_samples_data.tsv'));
 
-    // Read top level folders as archive
+    const columns = [
+        'id', 'archive', 'description', 'tags', 'filename', 'license'
+    ];
 
-    const uploadsPath = path.join(__dirname, "uploads");
+    const stringifier = stringify({ header: true, columns: columns, delimiter: '\t' });
 
     const db = await dbPromise;
+    db.each("SELECT * FROM Sources WHERE hidden != 1 OR hidden IS NULL;", (err, row) => {
+        if (err) {
+            console.log(err.message);
+            return;
+        }
 
-    // Get directories inside 'uploads'
-    let archives = fs.readdirSync(uploadsPath)
-        .filter(dirent => fs.statSync(path.join(uploadsPath, dirent)).isDirectory());
+        console.log(row);
 
-    console.log("\nSource list:");
-    archives.forEach((archive) => {
-        const archivePath = path.join(uploadsPath, archive);
-
-        // Get files inside each archive directory
-        let files = fs.readdirSync(archivePath)
-            .filter(dirent => {
-                return !fs.statSync(path.join(archivePath, dirent)).isDirectory();
-            });
-
-        // Log the archive and its files
-        files.forEach(file => {
-            console.log(`${archive}, ${file}`);
-        });
+        stringifier.write(row);
     });
-    console.log("\n");
+
+    stringifier.pipe(writableStream);
+    // stringifier.destroy();
+
+    last_csv_version = user_version;
+    console.log("finished writing CSV");
+}
+
+function removeWhitespaceExceptSpace(str) {
+    /* 
+    Matches all whitespace characters except regular space (" ").
+    Includes:
+        \t (tab), \n (newline), \r (carriage return), \f (form feed), \v (vertical tab).
+        Unicode whitespaces like \u00A0 (non-breaking space), \u2000-\u200A (various spaces), etc.
+    */
+    return str.replace(/[\t\n\r\f\v\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, '');
 }

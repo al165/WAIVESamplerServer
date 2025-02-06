@@ -7,7 +7,7 @@ CREATE TABLE Sources(
     tags STRING,
     filename STRING,
     license STRING,
-    hidden BOOL
+    hidden INTEGER
 );
 
 CREATE TABLE Archives (
