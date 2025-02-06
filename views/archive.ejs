@@ -7,6 +7,7 @@
   <title>Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 
 <body class="bg-light">
@@ -21,14 +22,17 @@
   </nav>
 
   <div class="container mt-4">
-    <h2>Archive: <%= archive %></h2>
+    <div class="container row justify-content-between align-items-center">
+      <h2 class="col"><a href="/dashboard"><i class="bi bi-arrow-left"></i></a> Archive: <%= archive %></h2>
+      <span class="text-secondary col-1"><%= user_version %></span>
+    </div>
 
     <!-- Upload File Form -->
     <div class="card my-4 p-3">
       <h4>Upload File</h4>
       <form action="/upload?archive=<%= archive %>" method="POST" enctype="multipart/form-data">
         <div class="mb-3">
-          <input type="file" name="file" class="form-control" required>
+          <input type="file" name="file" class="form-control" required multiple>
         </div>
         <input name="archive" type="hidden" value="<%= archive %>">
         <button type="submit" class="btn btn-primary">Upload</button>
@@ -41,7 +45,7 @@
       <form action="/update/<%= archive %>" method="POST">
         <div class="mb-3">
           <div class="container">
-            <div class="row">
+            <div class="row align-items-center">
               <div class="col">
                 <input name="description" class="form-control" type="text" placeholder="Description" data-toggle="tooltip" data-placement="bottom" title="Short description of audio file.">
               </div>
@@ -50,6 +54,11 @@
               </div>
               <div class="col">
                 <input name="license" class="form-control" type="text" placeholder="License" data-toggle="tooltip" data-placement="bottom" title="A full URL (including https://) to a page with license info about the audio material.">
+              </div>
+              <div class="col">
+                <input name="hidden" class="form-check-input" type="checkbox" data-toggle="tooltip" data-placement="bottom" title="Hide source from appearing in list." id="hidden-checkbox-all">
+                <label class="form-check-label" for="hidden">hidden</label>
+                <input type="hidden" id="checkboxHidden" name="checkboxState" value="indeterminate">
               </div>
             </div>
           </div>
@@ -66,10 +75,12 @@
         <thead>
           <tr>
             <th scope="col">id</th>
-            <th scope="col">filename</th>
-            <th scope="col">description</th>
+            <th scope="col-6">filename</th>
+            <th scope="col-6">description</th>
             <th scope="col">tags</th>
             <th scope="col">license</th>
+            <th scope="col" class="text-center">hidden</th>
+            <th scope="col" class="text-end">edit</th>
           </tr>
         </thead>
         <tbody>
@@ -91,6 +102,14 @@
             <% } else { %>
             <td>--</td>
             <% } %>
+            <td class="text-center">
+              <% if(file.hidden) {%>
+              <i class="bi bi-eye-slash"></i>
+              <% } else {%>
+              <i class="bi bi-eye"></i>
+              <% } %>
+            </td>
+            <td class="text-end"><button class="btn btn-light edit-btn" type="button" data-bs-toggle="modal" data-bs-target="#editModal" data-source-id="<%= file.id %>"><i class="bi bi-pencil"></i></button></td>
           </tr>
           <% }) %>
           <% } %>
@@ -99,6 +118,74 @@
     </div>
   </div>
 
+  <!-- Modal for individual editing -->
+  <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h1 class="modal-title fs-5" id="editModalLabel">Edit source</h1>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form action="/update/<%= archive %>" method="POST">
+          <div class="modal-body mb-3">
+            <input name="description" class="form-control" type="text" placeholder="Description" data-toggle="tooltip" data-placement="bottom" title="Short description of audio file.">
+            <input name="tags" class="form-control" type="text" placeholder="Tags" data-toggle="tooltip" data-placement="bottom" title="List of tags separated by the '|' symbol. E.g. 'car|machine|engine'">
+            <input name="license" class="form-control" type="text" placeholder="License" data-toggle="tooltip" data-placement="bottom" title="A full URL (including https://) to a page with license info about the audio material.">
+
+            <input name="hidden" class="form-check-input" type="checkbox" data-toggle="tooltip" data-placement="bottom" title="Hide source from appearing in list." id="hidden-checkbox-single">
+            <label class="form-check-label" for="hidden">hidden</label>
+            <input type="hidden" id="checkboxHiddenSingle" name="checkboxState" value="indeterminate">
+
+            <input name="id" type="hidden" id="modal-edit-id">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll(".edit-btn");
+    const modalId = document.querySelector("#modal-edit-id");
+    for (const btn of buttons) {
+      btn.addEventListener("click", function(ev) {
+        modalId.setAttribute("value", btn.dataset.sourceId);
+      });
+    }
+
+    // For the global editor
+    const hiddenAllCheckbox = document.querySelector("#hidden-checkbox-all");
+    const hiddenInput = document.getElementById("checkboxHidden");
+    hiddenAllCheckbox.indeterminate = true;
+
+    hiddenAllCheckbox.addEventListener("change", function() {
+      if (hiddenAllCheckbox.indeterminate) {
+        hiddenInput.value = "indeterminate";
+      } else if (hiddenAllCheckbox.checked) {
+        hiddenInput.value = "checked";
+      } else {
+        hiddenInput.value = "unchecked";
+      }
+    });
+
+    // for the modal editor
+    const hiddenSingleCheckbox = document.querySelector("#hidden-checkbox-single");
+    const hiddenInputSingle = document.getElementById("checkboxHiddenSingle");
+    hiddenSingleCheckbox.indeterminate = true;
+
+    hiddenSingleCheckbox.addEventListener("change", function() {
+      if (hiddenSingleCheckbox.indeterminate) {
+        hiddenInputSingle.value = "indeterminate";
+      } else if (hiddenSingleCheckbox.checked) {
+        hiddenInputSingle.value = "checked";
+      } else {
+        hiddenInputSingle.value = "unchecked";
+      }
+    });
+  </script>
 </body>
 
 </html>

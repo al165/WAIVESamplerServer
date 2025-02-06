@@ -18,6 +18,8 @@ const dbPromise = open({
 const app = express();
 const PORT = 3000;
 
+let user_version;
+
 import { config } from 'dotenv';
 config({ path: './.env' });
 
@@ -92,7 +94,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 
     console.log(archives);
 
-    res.render('dashboard', { archives });
+    res.render('dashboard', { archives, user_version });
 });
 
 app.get('/dashboard/*', isAuthenticated, async (req, res) => {
@@ -106,19 +108,21 @@ app.get('/dashboard/*', isAuthenticated, async (req, res) => {
     const db = await dbPromise;
     const sources = await db.all('SELECT * FROM Sources WHERE archive = ?', [archive]);
 
-    res.render('archive', { files: sources, archive });
+    res.render('archive', { files: sources, archive, user_version });
 });
 
-app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => {
+app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
     const archive = req.query.archive;
-    const filename = req.file.originalname;
-
-    console.log(`/upload archive: ${archive} filename: ${filename}`);
-    console.log(req.file);
-
+    const files = req.files;
     const db = await dbPromise;
-    await db.run("INSERT INTO Sources(archive, filename) VALUES (?, ?)", [archive, filename])
 
+    await db.run("BEGIN TRANSACTION");
+    for (const file of files) {
+        await db.run("INSERT INTO Sources(archive, filename) VALUES (?, ?)", [archive, file.originalname]);
+    }
+    await db.run("COMMIT");
+
+    await updateVersion(db);
     res.redirect(`/dashboard/${archive}`);
 });
 
@@ -131,10 +135,11 @@ app.post('/add-archive', isAuthenticated, async (req, res) => {
     }
 
     const db = await dbPromise;
-    db.run("INSERT OR IGNORE INTO Archives(name) VALUES (?)", [archiveName], (err) => {
+    await db.run("INSERT OR IGNORE INTO Archives(name) VALUES (?)", [archiveName], (err) => {
         if (err)
             console.log(err);
     });
+    await updateVersion(db);
 
     res.redirect(`/dashboard/${archiveName}`);
 });
@@ -150,37 +155,55 @@ app.post('/update/*', isAuthenticated, async (req, res) => {
         return;
     }
 
-    const { description, tags, license } = req.body;
+    const { description, tags, license, checkboxState, id } = req.body;
+
+    console.log("id: " + id);
 
     let queryString = "UPDATE Sources SET ";
     let columns = [];
     let params = [];
 
+    let update = false;
+
     if (description) {
         columns.push("description = ?");
         params.push(description);
+        update = true;
     }
 
     if (tags) {
         columns.push("tags = ?");
         params.push(tags);
+        update = true;
     }
 
     if (license) {
         columns.push("license = ?");
         params.push(license);
+        update = true;
+    }
+
+    if (checkboxState != "indeterminate") {
+        columns.push("hidden = ?");
+        params.push(checkboxState == "checked");
+        update = true;
     }
 
     queryString += columns.join(', ');
-    queryString += "WHERE archive = ?";
+    queryString += " WHERE archive = ?";
+    params.push(archive);
+
+    if (id !== undefined) {
+        queryString += "AND id = ?";
+        params.push(id);
+    }
 
     console.log(queryString);
 
-    if (params.length > 0) {
-        params.push(archive);
+    if (update) {
         const db = await dbPromise;
-
         await db.run(queryString, params, (err) => console.log(err.message));
+        await updateVersion(db);
     }
 
     res.redirect(`/dashboard/${archive}`);
@@ -190,12 +213,27 @@ app.post('/update/*', isAuthenticated, async (req, res) => {
 const setup = async () => {
     const db = await dbPromise;
     await db.migrate();
+
+    let result = await db.all("PRAGMA user_version", []);
+    console.log("user_version: ");
+    user_version = result[0].user_version;
+    console.log(user_version);
+
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
     });
 }
 
 setup();
+
+async function updateVersion(db) {
+    console.log("updateVersion()");
+
+    user_version = Math.floor(Date.now() / 1000);
+    await db.run(`PRAGMA user_version = ${user_version}`, [], (err) => {
+        console.log(err);
+    });
+}
 
 async function getSourceList() {
     // Creates a CSV file with the headings
