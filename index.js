@@ -136,15 +136,19 @@ app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
     const files = req.files;
     const db = await dbPromise;
 
+    let count = 0;
+
     await db.run("BEGIN TRANSACTION");
     for (const file of files) {
         // generate id
-        const serverID = 101;
-        const timestamp = Date.now() % 1000000;
-        const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        const id = parseInt(`${serverID}${timestamp}${rand}`);
+        const serverID = 1;
+        const timestamp = Date.now() % 100000;
+        // const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        const id = parseInt(`${serverID}${timestamp}${count.toString().padStart(3, '0')}`);
 
         await db.run("INSERT INTO Sources(id, archive, filename) VALUES (?, ?, ?)", [id, archive, file.originalname]);
+
+        count = (count + 1) % 1000;
     }
     await db.run("COMMIT");
 
