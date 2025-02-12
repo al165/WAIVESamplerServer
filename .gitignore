@@ -5,6 +5,8 @@ uploads/*
 !uploads/README.md
 
 *.db
+*.db-journal
+backups/*
 
 # generated CSV files
 *.tsv

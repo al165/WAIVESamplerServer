@@ -16,6 +16,9 @@
     <div class="container-fluid">
       <a class="navbar-brand" href="/dashboard">WAIVE Sampler Database Manager</a>
       <div class="d-flex">
+        <% if (undoSavePoints.length > 0) { %>
+        <button class="btn btn-outline-light mx-2" id="undo-button">Undo</button>
+        <% } %>
         <a href="/logout" class="btn btn-outline-light">Logout</a>
       </div>
     </div>
@@ -128,9 +131,9 @@
         </div>
         <form action="/update/<%= archive %>" method="POST">
           <div class="modal-body mb-3">
-            <input name="description" class="form-control" type="text" placeholder="Description" data-toggle="tooltip" data-placement="bottom" title="Short description of audio file.">
-            <input name="tags" class="form-control" type="text" placeholder="Tags" data-toggle="tooltip" data-placement="bottom" title="List of tags separated by the '|' symbol. E.g. 'car|machine|engine'">
-            <input name="license" class="form-control" type="text" placeholder="License" data-toggle="tooltip" data-placement="bottom" title="A full URL (including https://) to a page with license info about the audio material.">
+            <input name="description" class="form-control mb-2" type="text" placeholder="Description" data-toggle="tooltip" data-placement="bottom" title="Short description of audio file.">
+            <input name="tags" class="form-control mb-2" type="text" placeholder="Tags" data-toggle="tooltip" data-placement="bottom" title="List of tags separated by the '|' symbol. E.g. 'car|machine|engine'">
+            <input name="license" class="form-control mb-2" type="text" placeholder="License" data-toggle="tooltip" data-placement="bottom" title="A full URL (including https://) to a page with license info about the audio material.">
 
             <input name="hidden" class="form-check-input" type="checkbox" data-toggle="tooltip" data-placement="bottom" title="Hide source from appearing in list." id="hidden-checkbox-single">
             <label class="form-check-label" for="hidden">hidden</label>
@@ -186,6 +189,9 @@
       }
     });
   </script>
+
+  <script src="/js/undo.js"></script>
+
 </body>
 
 </html>

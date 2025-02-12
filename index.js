@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 
-const dbPromise = open({
+let dbPromise = open({
     filename: 'data.db',
     driver: sqlite3.Database
 });
@@ -21,7 +21,7 @@ const app = express();
 const PORT = 3000;
 
 let user_version;
-let last_csv_version;
+let undoSavePoints = [];
 
 import { config } from 'dotenv';
 config({ path: './.env' });
@@ -34,6 +34,7 @@ app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use('/file', express.static(CONFIG_DIR));
+app.use('/js', express.static('js'));
 
 // Session configuration
 app.use(session({
@@ -103,7 +104,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
         return rows;
     });
 
-    res.render('dashboard', { archives, user_version });
+    res.render('dashboard', { archives, user_version, undoSavePoints });
 });
 
 app.get('/dashboard/*', isAuthenticated, async (req, res) => {
@@ -117,7 +118,28 @@ app.get('/dashboard/*', isAuthenticated, async (req, res) => {
     const db = await dbPromise;
     const sources = await db.all('SELECT * FROM Sources WHERE archive = ?', [archive]);
 
-    res.render('archive', { files: sources, archive, user_version });
+    res.render('archive', { files: sources, archive, user_version, undoSavePoints });
+});
+
+app.get('/undo', isAuthenticated, async (req, res) => {
+    if (undoSavePoints.length == 0)
+        res.redirect('/dashboard');
+
+    let lastSp = undoSavePoints.pop();
+    console.log(lastSp);
+
+    fs.renameSync(path.join(__dirname, 'backups', lastSp), path.join(__dirname, 'data.db'));
+
+    dbPromise = open({
+        filename: 'data.db',
+        driver: sqlite3.Database
+    });
+    const db = await dbPromise;
+
+    let result = await db.all("PRAGMA user_version", []);
+    user_version = result[0].user_version;
+
+    res.sendStatus(200);
 });
 
 // POST Routes
@@ -138,6 +160,7 @@ app.post('/upload', isAuthenticated, upload.array('file'), async (req, res) => {
 
     let count = 0;
 
+    createSavePoint(db);
     await db.run("BEGIN TRANSACTION");
     for (const file of files) {
         // generate id
@@ -165,6 +188,7 @@ app.post('/add-archive', isAuthenticated, async (req, res) => {
     }
 
     const db = await dbPromise;
+    createSavePoint(db);
     await db.run("INSERT OR IGNORE INTO Archives(name) VALUES (?)", [archiveName], (err) => {
         if (err)
             console.log(err);
@@ -232,6 +256,7 @@ app.post('/update/*', isAuthenticated, async (req, res) => {
 
     if (update) {
         const db = await dbPromise;
+        createSavePoint(db)
         await db.run(queryString, params, (err) => console.log(err.message));
         await updateVersion(db);
     }
@@ -249,7 +274,24 @@ const setup = async () => {
     user_version = result[0].user_version;
     console.log(user_version);
 
-    createCSV();
+    await createCSV();
+
+    // get list of backups:
+    console.log("Getting backups:");
+    const backupDir = path.join(__dirname, 'backups/');
+    console.log(backupDir);
+    const backups = fs.readdirSync(backupDir);
+    undoSavePoints = backups.map(fn => {
+        let stat = fs.statSync(path.join(__dirname, 'backups', fn));
+
+        return {
+            name: fn,
+            time: stat.mtime.getTime()
+        }
+    })
+        .sort((a, b) => { return a.time - b.time })
+        .map(v => v.name);
+    console.log(undoSavePoints);
 
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
@@ -297,8 +339,29 @@ async function createCSV() {
 
     stringifier.pipe(writableStream);
 
-    last_csv_version = user_version;
     console.log("finished writing CSV");
+}
+
+async function createSavePoint(db) {
+    let sp = `sp${undoSavePoints.length}.db`;
+
+    if (!fs.existsSync(path.join(__dirname, 'backups'))) {
+        fs.mkdirSync(path.join(__dirname, 'backups'));
+    }
+
+    fs.copyFileSync(path.join(__dirname, 'data.db'), path.join(__dirname, 'backups', sp));
+
+    undoSavePoints.push(sp);
+    console.log(undoSavePoints);
+
+    while (undoSavePoints.length > 10) {
+        let oldSp = undoSavePoints.shift();
+
+        if (fs.existsSync(path.join(__dirname, 'backups', oldSp))) {
+            fs.rmSync(path.join(__dirname, 'backups', oldSp));
+            console.log("removed old backup " + oldSp);
+        }
+    }
 }
 
 function removeWhitespaceExceptSpace(str) {

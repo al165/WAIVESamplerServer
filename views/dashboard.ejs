@@ -15,6 +15,9 @@
     <div class="container-fluid">
       <a class="navbar-brand" href="/dashboard">WAIVE Sampler Database Manager</a>
       <div class="d-flex">
+        <% if (undoSavePoints.length > 0) { %>
+        <button class="btn btn-outline-light mx-2" id="undo-button">Undo</button>
+        <% } %>
         <a href="/logout" class="btn btn-outline-light">Logout</a>
       </div>
     </div>
@@ -37,7 +40,7 @@
       </form>
     </div>
 
-    <!-- List of Files/Folders -->
+    <!-- List of Archives -->
     <div class="card my-4 p-3">
       <class class="container row justify-content-between align-items-center">
         <h4 class="col-8">Archive List</h4>
@@ -63,6 +66,8 @@
       </ul>
     </div>
   </div>
+
+  <script src="/js/undo.js"></script>
 
 </body>
 
